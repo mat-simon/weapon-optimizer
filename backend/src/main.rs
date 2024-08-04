@@ -1,309 +1,220 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use actix_cors::Cors;
-use futures::future::join_all;
+use mongodb::bson::doc;
+use mongodb::{Client, options::ClientOptions, options::ServerApi, options::ServerApiVersion};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
-use std::fs::create_dir_all;
-use std::future::Future;
 use std::sync::Arc;
-use tokio::{fs, task};
-use tokio::sync::{RwLock, Mutex};
-use crate::weapons::{Weapon, WeaponBaseStats, Module, BulletType, WeaponType};
-use crate::calculate::{optimize_weapon, get_available_rolls, get_available_modules, OptimizationConfig, generate_or_load_module_combinations};
-use tokio::sync::Semaphore;
-mod weapons;
-mod calculate;
-mod modules {
-    pub mod general_rounds_modules;
-    pub mod special_rounds_modules;
-    pub mod impact_rounds_modules;
-    pub mod sniper_modules;
-    pub mod shotgun_modules;
-    pub mod launcher_modules;
-}
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+use dotenv::dotenv;
+use std::env;
+use log::{error, info};
+use futures::TryStreamExt;
+use serde_json::json;
 
-#[derive(Clone, Serialize, Deserialize)]
-struct ModuleCombinations {
-    combinations: Vec<Vec<usize>>,
-}
+pub mod weapons;
+pub mod calculate;
+pub mod modules;
+
+use crate::weapons::Weapon;
+use crate::calculate::OptimizationResult;
 
 #[derive(Deserialize, Debug)]
 struct OptimizationRequest {
-    weapon: Weapon,
+    weapon: String,
     weak_point_hit_chance: f64,
     valby: bool,
-    gley: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct OptimizationResult {
-    max_dps: f64,
-    best_rolls: Vec<weapons::Roll>,
-    best_modules: Vec<Module>,
-}
-
-struct OptimizationCache {
-    module_combinations: RwLock<HashMap<(BulletType, Option<WeaponType>), ModuleCombinations>>,
-    results: RwLock<HashMap<String, OptimizationResult>>,
-}
-
-impl OptimizationCache {
-    fn new() -> Self {
-        OptimizationCache {
-            module_combinations: RwLock::new(HashMap::new()),
-            results: RwLock::new(HashMap::new()),
-        }
-    }
-
-    async fn get_or_compute_module_combinations(
-        &self,
-        bullet_type: BulletType,
-        weapon_type: WeaponType,
-    ) -> Vec<Vec<usize>> {
-        let mut cache = self.module_combinations.write().await;
-        let key = if bullet_type == BulletType::HighPowerRounds {
-            (bullet_type, Some(weapon_type))
-        } else {
-            (bullet_type, None)
-        };
-
-        if let Some(combinations) = cache.get(&key) {
-            combinations.combinations.clone()
-        } else {
-            let modules = get_available_modules(bullet_type, weapon_type);
-            let combinations = generate_or_load_module_combinations(&modules, bullet_type, weapon_type).await;
-            
-            let module_combinations = ModuleCombinations { combinations: combinations.clone() };
-            cache.insert(key, module_combinations);
-            
-            combinations
-        }
-    }
-
-    async fn get_or_compute_result<F, Fut>(
-        &self,
-        key: &str,
-        compute: F,
-    ) -> OptimizationResult
-    where
-        F: FnOnce() -> Fut,
-        Fut: Future<Output = OptimizationResult>,
-    {
-        let mut cache = self.results.write().await;
-        if let Some(result) = cache.get(key) {
-            result.clone()
-        } else {
-            let result = compute().await;
-            cache.insert(key.to_string(), result.clone());
-            result
-        }
-    }
+struct WeaponResultDocument {
+    weapon: String,
+    weak_point_hit_chance: f64,
+    valby: bool,
+    #[serde(flatten)]
+    result: OptimizationResult,
 }
 
 struct AppState {
-    cache: Arc<OptimizationCache>,
-    module_combinations_ready: Arc<RwLock<bool>>,
-    request_semaphore: Arc<Semaphore>,
+    db: mongodb::Database,
+    weapon_results: Arc<RwLock<HashMap<String, WeaponResultDocument>>>,
 }
 
-async fn optimize_weapon_handler(req: web::Json<OptimizationRequest>, state: web::Data<AppState>) -> impl Responder {
-    let _permit = state.request_semaphore.acquire().await.unwrap();
-    println!("Received optimization request: {:?}", req);
-    if !*state.module_combinations_ready.read().await {
-        return HttpResponse::ServiceUnavailable().json(json!({"error": "Module combinations not ready"}));
-    }
-
-    let cache = &state.cache;
-    let cache_key = format!("{:?}_{}_{}_{}", req.weapon, req.weak_point_hit_chance, req.valby, req.gley);
-
-    let result = cache.get_or_compute_result(&cache_key, || async {
-        let base_stats = WeaponBaseStats::get(req.weapon);
-        let available_rolls = get_available_rolls(base_stats.weapon_type);
-        let available_modules = get_available_modules(base_stats.bullet_type, base_stats.weapon_type);
-        let config = OptimizationConfig {
-            valby: req.valby,
-            gley: req.gley,
-            gley_duration: 9.0,
-        };
-
-        let (max_dps, best_rolls, best_modules) = optimize_weapon(
-            cache,
-            base_stats,
-            available_rolls,
-            available_modules,
-            req.weak_point_hit_chance,
-            config,
-        ).await;
-
-        OptimizationResult {
-            max_dps,
-            best_rolls,
-            best_modules,
-        }
-    }).await;
-
-    HttpResponse::Ok().json(result)
+async fn index() -> HttpResponse {
+    HttpResponse::Ok().body("Weapon Optimizer API is running")
 }
 
-async fn get_weapons() -> impl Responder {
-    HttpResponse::Ok().json(Weapon::all())
+async fn optimize_weapon_handler(
+    req: web::Json<OptimizationRequest>,
+    data: web::Data<AppState>,
+) -> HttpResponse {
+    let cache_key = format!("{}_{}_{}", req.weapon, req.weak_point_hit_chance, req.valby);
+
+    let weapon_results = data.weapon_results.read().await;
+    if let Some(doc) = weapon_results.get(&cache_key) {
+        return HttpResponse::Ok().json(&doc.result);
+    }
+
+    HttpResponse::NotFound().finish()
 }
 
-async fn pre_compute_module_combinations(cache: Arc<OptimizationCache>, ready: Arc<RwLock<bool>>) {
-    println!("Starting pre-computation of module combinations...");
-    if let Err(e) = create_dir_all("module_combinations") {
-        eprintln!("Failed to create module_combinations directory: {}", e);
-        return;
-    }
-    let bullet_types = [BulletType::GeneralRounds, BulletType::SpecialRounds, BulletType::ImpactRounds];
-    let high_power_weapon_types = [WeaponType::SniperRifle, WeaponType::Shotgun, WeaponType::Launcher];
+async fn get_weapons() -> HttpResponse {
+    let weapons: Vec<String> = Weapon::all().iter().map(|w| w.to_string()).collect();
+    info!("Returning {} weapons", weapons.len());
+    HttpResponse::Ok().json(weapons)
+}
 
-    let mut tasks = Vec::new();
+async fn get_weapon_data(data: web::Data<AppState>) -> HttpResponse {
+    let weapon_results = data.weapon_results.read().await;
+    let weapon_data: HashMap<String, HashMap<String, OptimizationResult>> = weapon_results
+        .iter()
+        .map(|(key, doc)| {
+            let parts: Vec<&str> = key.split('_').collect();
+            let weapon = parts[0].to_string();
+            let hit_chance = parts[1].to_string();
+            let valby = parts[2] == "true";
+            (weapon, hit_chance, valby, doc.result.clone())
+        })
+        .fold(HashMap::new(), |mut acc, (weapon, hit_chance, valby, result)| {
+            acc.entry(weapon)
+                .or_insert_with(|| HashMap::new())
+                .insert(format!("{}_{}", hit_chance, if valby { "valby" } else { "noValby" }), result);
+            acc
+        });
 
-    for &bt in &bullet_types {
-        let cache = cache.clone();
-        tasks.push(task::spawn(async move {
-            println!("Computing combinations for {:?}", bt);
-            let combinations = cache.get_or_compute_module_combinations(bt, WeaponType::AssaultRifle).await;
-            println!("Finished computing combinations for {:?}", bt);
-            (bt, None, combinations)
-        }));
-    }
+    HttpResponse::Ok().json(weapon_data)
+}
 
-    for &wt in &high_power_weapon_types {
-        let cache = cache.clone();
-        tasks.push(task::spawn(async move {
-            println!("Computing combinations for {:?}", wt);
-            let combinations = cache.get_or_compute_module_combinations(BulletType::HighPowerRounds, wt).await;
-            println!("Finished computing combinations for {:?}", wt);
-            (BulletType::HighPowerRounds, Some(wt), combinations)
-        }));
-    }
-
-    let results = join_all(tasks).await;
-
-    println!("All module combinations computed. Writing to files...");
-
-    for result in results {
-        match result {
-            Ok((bullet_type @ (BulletType::GeneralRounds | BulletType::SpecialRounds | BulletType::ImpactRounds), _, combinations)) => {
-                let file_name = format!("module_combinations/{:?}_valid_combinations.bin", bullet_type);
-                tokio::spawn(async move {
-                    if let Ok(data) = bincode::serialize(&ModuleCombinations { combinations }) {
-                        if let Err(e) = fs::write(&file_name, data).await {
-                            eprintln!("Failed to write file {}: {}", file_name, e);
-                        } else {
-                            println!("Successfully wrote file: {}", file_name);
-                        }
-                    } else {
-                        eprintln!("Failed to serialize combinations for {:?}", bullet_type);
-                    }
-                });
-            }
-            Ok((BulletType::HighPowerRounds, Some(wt), combinations)) => {
-                let file_name = format!("module_combinations/{:?}_valid_combinations.bin", wt);
-                tokio::spawn(async move {
-                    if let Ok(data) = bincode::serialize(&ModuleCombinations { combinations }) {
-                        if let Err(e) = fs::write(&file_name, data).await {
-                            eprintln!("Failed to write file {}: {}", file_name, e);
-                        } else {
-                            println!("Successfully wrote file: {}", file_name);
-                        }
-                    } else {
-                        eprintln!("Failed to serialize combinations for {:?}", wt);
-                    }
-                });
-            }
-            Err(e) => eprintln!("Task failed: {:?}", e),
-            _ => eprintln!("Unexpected result format"),
+async fn refresh_weapon_results(data: web::Data<AppState>) -> HttpResponse {
+    match load_all_weapon_results(&data.db).await {
+        Ok(new_results) => {
+            let mut weapon_results = data.weapon_results.write().await;
+            *weapon_results = new_results;
+            HttpResponse::Ok().json(json!({"status": "Weapon results refreshed successfully"}))
+        },
+        Err(e) => {
+            error!("Failed to refresh weapon results: {}", e);
+            HttpResponse::InternalServerError().json(json!({"status": "Failed to refresh weapon results"}))
         }
     }
-
-    println!("All module combinations written to files.");
-    {
-        let mut ready_guard = ready.write().await;
-        *ready_guard = true;
-        println!("Module combinations ready flag set to true.");
-    }
-    println!("Pre-computation completed successfully.");
 }
 
-async fn delete_module_combination_files() -> std::io::Result<()> {
-    let mut dir = fs::read_dir("module_combinations").await?;
-    while let Some(entry) = dir.next_entry().await? {
-        if entry.file_type().await?.is_file() {
-            if let Some(extension) = entry.path().extension() {
-                if extension == "bin" {
-                    fs::remove_file(entry.path()).await?;
-                }
+async fn load_all_weapon_results(db: &mongodb::Database) -> Result<HashMap<String, WeaponResultDocument>, mongodb::error::Error> {
+    let collection = db.collection::<WeaponResultDocument>("weapon_results");
+    let mut cursor = collection.find(None, None).await?;
+
+    let mut results = HashMap::new();
+    while let Some(doc) = cursor.try_next().await? {
+        let key = format!("{}_{}_{}", doc.weapon, doc.weak_point_hit_chance, doc.valby);
+        results.insert(key, doc);
+    }
+
+    Ok(results)
+}
+
+async fn create_mongo_client() -> mongodb::error::Result<Client> {
+    dotenv().ok();
+    let mongodb_uri = env::var("MONGODB_URI").expect("MONGODB_URI must be set");
+    println!("Connecting to MongoDB...");
+    
+    let mut client_options = ClientOptions::parse(&mongodb_uri).await?;
+    
+    // Set the server API version to 1
+    let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
+    client_options.server_api = Some(server_api);
+    
+    // Increase timeout and add retries
+    client_options.connect_timeout = Some(std::time::Duration::from_secs(30));
+    client_options.retry_writes = Some(true);
+    client_options.retry_reads = Some(true);
+
+    let client = Client::with_options(client_options)?;
+    
+    // Test the connection
+    client.database("admin").run_command(doc! {"ping": 1}, None).await?;
+    
+    println!("Connected to MongoDB successfully!");
+    Ok(client)
+}
+
+#[derive(Deserialize)]
+struct ClearCacheQuery {
+    target: Option<String>,
+}
+
+async fn clear_cache(data: web::Data<AppState>, query: web::Query<ClearCacheQuery>) -> HttpResponse {
+    let mut weapon_results = data.weapon_results.write().await;
+    
+    match query.target.as_deref() {
+        Some("all") => {
+            weapon_results.clear();
+            HttpResponse::Ok().json(json!({"status": "All cache cleared successfully"}))
+        },
+        Some(weapon) => {
+            let keys_to_remove: Vec<String> = weapon_results.keys()
+                .filter(|k| k.starts_with(weapon))
+                .cloned()
+                .collect();
+            
+            for key in keys_to_remove {
+                weapon_results.remove(&key);
             }
-        }
+            HttpResponse::Ok().json(json!({"status": format!("Cache cleared for weapon: {}", weapon)}))
+        },
+        None => HttpResponse::BadRequest().json(json!({"status": "No target specified for cache clearing"}))
     }
-    Ok(())
-}
-
-async fn delete_module_combinations_handler() -> impl Responder {
-    match delete_module_combination_files().await {
-        Ok(_) => HttpResponse::Ok().body("Module combination files deleted successfully"),
-        Err(e) => HttpResponse::InternalServerError().body(format!("Failed to delete files: {}", e)),
-    }
-}
-
-async fn get_module_combinations_status(state: web::Data<AppState>) -> impl Responder {
-    println!("Received request for module combinations status");
-    let status = *state.module_combinations_ready.read().await;
-    println!("Module combinations status: {}", status);
-    HttpResponse::Ok().json(json!({"ready": status}))
-}
-
-async fn server_ready_handler() -> impl Responder {
-    HttpResponse::Ok().json(json!({"ready": true}))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("Starting server initialization...");
+    env_logger::init();
 
-    let cache = Arc::new(OptimizationCache::new());
-    let module_combinations_ready = Arc::new(RwLock::new(false));
+    let mongo_client = match create_mongo_client().await {
+        Ok(client) => client,
+        Err(e) => {
+            error!("Failed to create MongoDB client: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+        }
+    };
 
-    println!("Pre-computing module combinations...");
-    pre_compute_module_combinations(cache.clone(), module_combinations_ready.clone()).await;
+    let db = mongo_client.database("weapon_optimizer");
+    
+    info!("Loading all weapon results from database...");
+    let weapon_results = match load_all_weapon_results(&db).await {
+        Ok(results) => Arc::new(RwLock::new(results)),
+        Err(e) => {
+            error!("Failed to load weapon results: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+        }
+    };
+    info!("Weapon results loaded successfully");
 
-    // Wait until module combinations are ready
-    while !*module_combinations_ready.read().await {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    }
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let address = format!("0.0.0.0:{}", port);
 
-    println!("Module combinations loaded. Starting server...");
-
-    let app_state = web::Data::new(AppState {
-        cache: cache.clone(),
-        module_combinations_ready: module_combinations_ready.clone(),
-        request_semaphore: Arc::new(Semaphore::new(5)),
-    });
+    println!("Starting server at: {}", address);
 
     HttpServer::new(move || {
-        let cors = Cors::default()
-            .allowed_origin("http://localhost:3000")
-            .allowed_methods(vec!["GET", "POST"])
-            .allowed_headers(vec![
-                actix_web::http::header::AUTHORIZATION,
-                actix_web::http::header::ACCEPT,
-                actix_web::http::header::CONTENT_TYPE,
-            ])
-            .supports_credentials()
-            .max_age(3600);
-
-        App::new()
-            .wrap(cors)
-            .app_data(app_state.clone())
-            .service(web::resource("/optimize").route(web::post().to(optimize_weapon_handler)))
-            .service(web::resource("/weapons").route(web::get().to(get_weapons)))
-            .service(web::resource("/server-ready").route(web::get().to(server_ready_handler)))
+            App::new()
+                .wrap(
+                    Cors::default()
+                        .allowed_origin("https://tfd-weapon.onrender.com")
+                        .allowed_methods(vec!["GET", "POST"])
+                        .allowed_headers(vec!["Content-Type"])
+                        .max_age(3600)
+                )
+                .app_data(web::Data::new(AppState { 
+                    db: db.clone(), 
+                    weapon_results: weapon_results.clone() 
+                }))
+                .route("/", web::get().to(index))
+                .route("/weapons", web::get().to(get_weapons))
+                .route("/optimize", web::post().to(optimize_weapon_handler))
+                .route("/weapon-data", web::get().to(get_weapon_data))
+                .route("/refresh-results", web::post().to(refresh_weapon_results))
+                .route("/clear-cache", web::post().to(clear_cache))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(address)?
     .run()
     .await
 }

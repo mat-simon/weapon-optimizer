@@ -1,21 +1,20 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
 
-const inter = Inter({ subsets: ['latin'] })
+import { WeaponDataProvider } from '@/components/WeaponDataContext'
 
 export const metadata = {
   title: 'Weapon Optimizer',
   description: 'Optimize your weapon loadout',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={inter.className}>{children}</body>
+    <html lang="en">
+      <body>
+        <WeaponDataProvider>
+          {children}
+        </WeaponDataProvider>
+      </body>
     </html>
   )
 }

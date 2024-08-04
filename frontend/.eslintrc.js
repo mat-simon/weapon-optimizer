@@ -1,3 +1,4 @@
+/* eslint-env node */
 module.exports = {
     parser: '@typescript-eslint/parser',
     plugins: ['@typescript-eslint', 'import'],
@@ -20,10 +21,19 @@ module.exports = {
     },
     settings: {
       'import/resolver': {
+        typescript: {},
         alias: {
           map: [['@', './src']],
           extensions: ['.ts', '.js', '.jsx', '.json', '.tsx']
         }
       }
-    }
+    },
+    overrides: [
+      {
+        files: ['next.config.js'],
+        env: {
+          node: true,
+        },
+      },
+    ],
   };

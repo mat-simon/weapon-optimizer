@@ -296,30 +296,6 @@ pub fn get_modules() -> Vec<Module> {
                 ModuleEffect { effect_type: ModuleBonusType::Crit, value: 0.01 },
             ],
         },
-        // Module {
-        //     name: "Deadeye".to_string(),
-        //     module_type: ModuleType::Accuracy,
-        //     effects: vec![
-        //         ModuleEffect { effect_type: ModuleBonusType::Atk, value: 0.01 }],
-        // },
-        // Module {
-        //     name: "Weak Point Aiming".to_string(),
-        //     module_type: ModuleType::Accuracy,
-        //     effects: vec![
-        //         ModuleEffect { effect_type: ModuleBonusType::WeakPointDamage, value: 0.02 }],
-        // },
-        // Module {
-        //     name: "Hit Rate Focus".to_string(),
-        //     module_type: ModuleType::Accuracy,
-        //     effects: vec![
-        //         ModuleEffect { effect_type: ModuleBonusType::CritDamage, value: 0.13 }],
-        // },
-        // Module {
-        //     name: "Hit Rate Insight".to_string(),
-        //     module_type: ModuleType::Accuracy,
-        //     effects: vec![
-        //         ModuleEffect { effect_type: ModuleBonusType::Crit, value: 0.03 }],
-        // },
         Module {
             name: "Ele Gunbarrel".to_string(),
             module_type: ModuleType::Gunbarrel,
