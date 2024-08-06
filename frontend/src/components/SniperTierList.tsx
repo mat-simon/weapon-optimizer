@@ -20,7 +20,7 @@ const SNIPER_WEAPONS = new Set([
   'SupermoonZ15'
 ]);
 
-const WeaponTierList: React.FC = () => {
+const SniperTierList: React.FC = () => {
   const { weaponData, isLoading, error } = useWeaponData();
   const [isValby, setIsValby] = useState(false);
   const [tiers, setTiers] = useState<{ [key: string]: { tier: string; dps: number } }>({});
@@ -31,7 +31,7 @@ const WeaponTierList: React.FC = () => {
       const relevantKey = Object.keys(data).find(key => 
         key.startsWith('1_') && key.endsWith(isValby ? 'valby' : 'noValby')
       );
-      if (relevantKey && !isSniper(weaponName)) {
+      if (relevantKey && isSniper(weaponName)) {
         acc[weaponName] = data[relevantKey];
       }
       return acc;
@@ -119,4 +119,4 @@ const WeaponTierList: React.FC = () => {
   );
 };
 
-export default WeaponTierList;
+export default SniperTierList;

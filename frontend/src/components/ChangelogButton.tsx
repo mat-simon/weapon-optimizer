@@ -33,9 +33,17 @@ const changelog: ChangelogEntry[] = [
     changes: [
       "Tier list links to full weapon results",
       "Added Firing Fiesta module",
-      "Added module importance"
+      "Added module DPS contribution"
     ],
     notes: "Snipers are damage per bullet, not DPS; should be separated out of the DPS tier list"
+  },
+  {
+    version: "1.02",
+    date: "2024-08-06",
+    changes: [
+      "Sniper tier list separated",
+    ],
+    notes: "Todo: Enzo buff, Gley no-reload"
   },
 ];
 

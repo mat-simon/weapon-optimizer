@@ -274,7 +274,7 @@ export default function WeaponOptimizer({
               <div key={index} className="bg-muted p-2 rounded text-muted-foreground text-xs">
                 <div className="font-semibold">{module.name}</div>
                 <div className="text-xs">{module.module_type}</div>
-                <div className="mt-1">DPS Contribution: {importance.toFixed(1)}</div>
+                <div className="mt-1">Contribution: {importance.toFixed(1)}</div>
               </div>
             ))
           }
