@@ -16,6 +16,7 @@ export default function HomeClient() {
   const searchParams = useSearchParams();
   const weaponFromUrl = searchParams.get('weapon');
   const valbyFromUrl = searchParams.get('valby') === 'true';
+  const hitChanceFromUrl = searchParams.get('hitChance');
 
   return (
     <>
@@ -28,7 +29,11 @@ export default function HomeClient() {
           </Link>
         </div>
         <Suspense fallback={<div>Loading...</div>}>
-          <DynamicWeaponOptimizer initialWeapon={weaponFromUrl} initialValby={valbyFromUrl} />
+          <DynamicWeaponOptimizer 
+            initialWeapon={weaponFromUrl} 
+            initialValby={valbyFromUrl} 
+            initialHitChance={hitChanceFromUrl}
+          />
         </Suspense>
       </div>
     </>

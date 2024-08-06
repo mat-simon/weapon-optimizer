@@ -11,6 +11,7 @@ interface WeaponDataContextType {
   isLoading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
+  clearCacheAndFetch: (target: string) => Promise<void>;
 }
 
 const WeaponDataContext = createContext<WeaponDataContextType | undefined>(undefined);
@@ -47,8 +48,30 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
     await fetchWeaponData();
   };
 
+  const clearCacheAndFetch = async (target: string) => {
+    try {
+      const response = await fetch(`${API_URL}/clear-cache-and-fetch?target=${target}`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to clear cache and fetch new data');
+      }
+      // Refresh the weapon data after clearing cache and fetching
+      await fetchWeaponData();
+    } catch (err) {
+      console.error('Error clearing cache and fetching new data:', err);
+      setError('Failed to clear cache and fetch new data');
+    }
+  };
+
   return (
-    <WeaponDataContext.Provider value={{ weaponData, isLoading, error, refreshData }}>
+    <WeaponDataContext.Provider value={{ 
+      weaponData, 
+      isLoading, 
+      error, 
+      refreshData, 
+      clearCacheAndFetch
+    }}>
       {children}
     </WeaponDataContext.Provider>
   );

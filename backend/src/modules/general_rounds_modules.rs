@@ -286,12 +286,12 @@ pub fn get_modules() -> Vec<Module> {
                 ModuleEffect { effect_type: ModuleBonusType::FireRate, value: -0.25 }
             ],
         },
-        // Module {
-        //     name: "Firing Fiesta".to_string(),
-        //     module_type: ModuleType::SpecialMod,
-        //     effects: vec![
-        //         ModuleEffect { effect_type: ModuleBonusType::FiringFiesta, value: 1.0 }],
-        // },
+        Module {
+            name: "Firing Fiesta".to_string(),
+            module_type: ModuleType::SpecialMod,
+            effects: vec![
+                ModuleEffect { effect_type: ModuleBonusType::FiringFiesta, value: 1.0 }],
+        },
         // Module {
         //     name: "Sweeping Squad".to_string(),
         //     module_type: ModuleType::SpecialMod,

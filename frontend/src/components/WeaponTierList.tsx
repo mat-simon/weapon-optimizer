@@ -89,7 +89,7 @@ const WeaponTierList: React.FC = () => {
               .map(([weaponName, weaponInfo]) => (
                 <Link 
                   key={weaponName} 
-                  href={`/?weapon=${encodeURIComponent(weaponName)}&valby=${isValby}`}
+                  href={`/?weapon=${encodeURIComponent(weaponName)}&valby=${isValby}&hitChance=1`}
                   className="bg-card text-card-foreground p-2 rounded hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 >
                   <div className="flex justify-between items-center">

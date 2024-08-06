@@ -23,6 +23,7 @@ interface Weapon {
 interface WeaponOptimizerProps {
   initialWeapon?: string | null;
   initialValby?: boolean;
+  initialHitChance?: string | null;
 }
 
 interface OptimizationConfig {
@@ -30,15 +31,22 @@ interface OptimizationConfig {
   enzo: boolean;
 }
 
-export default function WeaponOptimizer({ initialWeapon, initialValby }: WeaponOptimizerProps) {
+export default function WeaponOptimizer({ 
+  initialWeapon, 
+  initialValby, 
+  initialHitChance 
+}: WeaponOptimizerProps) {
+  const [hitChance, setHitChance] = useState<string>(initialHitChance || '1');
+  const [config, setConfig] = useState<OptimizationConfig>({ 
+    valby: initialValby || false, 
+    enzo: false 
+  });
   const [weapons, setWeapons] = useState<Weapon[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWeapon, setSelectedWeapon] = useState<Weapon | null>(null);
   const [open, setOpen] = useState(false);
-  const [hitChance, setHitChance] = useState<string>('1');
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [config, setConfig] = useState<OptimizationConfig>({ valby: false, enzo: false });
   const [error, setError] = useState<string | null>(null);
   const { weaponData, refreshData } = useWeaponData();
 
@@ -47,16 +55,21 @@ export default function WeaponOptimizer({ initialWeapon, initialValby }: WeaponO
   }, []);
 
   useEffect(() => {
-    if (initialWeapon && weapons.length > 0) {
+    if (initialWeapon) {
       const weapon = weapons.find(w => w.name === initialWeapon);
       if (weapon) {
         setSelectedWeapon(weapon);
+        setConfig(prev => ({ ...prev, valby: initialValby || false }));
+        setHitChance(initialHitChance || '1');
       }
     }
-    if (initialValby !== undefined) {
-      setConfig(prev => ({ ...prev, valby: initialValby, enzo: false }));
+  }, [initialWeapon, initialValby, initialHitChance, weapons]);
+
+  useEffect(() => {
+    if (initialWeapon && selectedWeapon) {
+      handleOptimize();
     }
-  }, [initialWeapon, initialValby, weapons]);
+  }, [initialWeapon, selectedWeapon]);
 
   const fetchWeapons = async () => {
     try {
@@ -78,7 +91,7 @@ export default function WeaponOptimizer({ initialWeapon, initialValby }: WeaponO
     setError(null);
 
     try {
-      const cacheKey = `${hitChance}_${config.valby}`;
+      const cacheKey = `${selectedWeapon.name}_${hitChance}_${config.valby}`;
       let optimizationResult = weaponData?.[selectedWeapon.name]?.[cacheKey];
 
       if (!optimizationResult) {
@@ -99,7 +112,7 @@ export default function WeaponOptimizer({ initialWeapon, initialValby }: WeaponO
         }
 
         optimizationResult = await response.json();
-        await refreshData(); // Refresh the weapon data after getting a new result
+        await refreshData();
       } else {
         console.log('Cache hit, using stored data');
       }
@@ -189,53 +202,44 @@ export default function WeaponOptimizer({ initialWeapon, initialValby }: WeaponO
       </div>
 
       <div className="flex space-x-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="valby"
-            checked={config.valby}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                setConfig(prev => ({ ...prev, valby: true, enzo: false }));
-              } else {
-                setConfig(prev => ({ ...prev, valby: false }));
-              }
-            }}
-          />
-          <label 
-            htmlFor="valby" 
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-          >
-            Valby Moisture Supply
-          </label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="enzo"
-            checked={config.enzo}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                setConfig(prev => ({ ...prev, enzo: true, valby: false }));
-              } else {
-                setConfig(prev => ({ ...prev, enzo: false }));
-              }
-            }}
-          />
-          <label 
-            htmlFor="enzo" 
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-          >
-            Enzo
-          </label>
-        </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox 
+          id="valby"
+          checked={config.valby}
+          onCheckedChange={(checked) => {
+            setConfig(prev => ({ ...prev, valby: checked === true, enzo: false }));
+          }}
+        />
+        <label 
+          htmlFor="valby" 
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Valby Moisture Supply
+        </label>
       </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox 
+          id="enzo"
+          checked={config.enzo}
+          onCheckedChange={(checked) => {
+            setConfig(prev => ({ ...prev, enzo: checked === true, valby: false }));
+          }}
+        />
+        <label 
+          htmlFor="enzo" 
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Enzo
+        </label>
+      </div>
+    </div>
 
-      <Button 
-        onClick={handleOptimize} 
-        className="w-full bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
-        disabled={isCalculating}
-      >
-        {isCalculating ? 'Optimizing...' : 'Optimize'}
-      </Button>
+    <Button 
+      onClick={handleOptimize}
+      disabled={isCalculating || !selectedWeapon}
+    >
+      {isCalculating ? 'Optimizing...' : 'Optimize'}
+    </Button>
 
       {error && (
         <div className="text-red-500 text-center mt-4">

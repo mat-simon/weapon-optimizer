@@ -316,8 +316,9 @@ fn load_module_combinations(dir: &str) -> Result<HashMap<String, ModuleCombinati
 }
 
 async fn clear_api_cache(target: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Clearing api cache...");
     let client = reqwest::Client::new();
-    let response = client.post("https://weapon-optimizer-api.onrender.com/clear-cache")
+    let response = client.post("https://weapon-optimizer-api.onrender.com/clear-cache-and-fetch")
         .query(&[("target", target)])
         .send()
         .await?;
@@ -352,25 +353,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match opts.cmd {
         Command::UpdateAll => {
             update_all(&db, &module_combinations).await?;
-            clear_api_cache("all").await?;
+            // clear_api_cache("all").await?;
         },
         Command::UpdateWeapons { names } => {
             update_weapons(&db, &module_combinations, names.clone()).await?;
             for name in names {
-                clear_api_cache(&name).await?;
+                // clear_api_cache(&name).await?;
             }
         },
         Command::UpdateWeaponType { weapon_type } => {
             update_weapon_type(&db, &module_combinations, weapon_type.clone()).await?;
-            clear_api_cache(&weapon_type).await?;
+            // clear_api_cache(&weapon_type).await?;
         },
         Command::UpdateBulletType { bullet_type } => {
             update_bullet_type(&db, &module_combinations, bullet_type.clone()).await?;
-            clear_api_cache(&bullet_type).await?;
+            // clear_api_cache(&bullet_type).await?;
         },
         Command::UpdateModules { module_type } => {
             update_modules(&module_combinations, module_type.clone()).await?;
-            clear_api_cache(&module_type).await?;
+            // clear_api_cache(&module_type).await?;
         },
     }
 

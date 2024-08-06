@@ -52,8 +52,9 @@ fn calculate_dps(stats: &WeaponBaseStats, weak_point_hit_chance: f64, gley: bool
         (stats.magazine_capacity).floor()
     };
     if stats.firing_fiesta == 1.0 {
-        cycle_time += 3.0;
-        bullets_per_cycle += (stats.fire_rate/60.0) * 3.0
+        let multiplier = (cycle_time / 10.0).min(1.0);
+        cycle_time += 3.0 * multiplier;
+        bullets_per_cycle += (stats.fire_rate / 60.0) * 3.0 * multiplier;
     }
 
     let ele_damage = (stats.base_atk * (stats.ele_enhancement) + stats.flat_ele_atk) *

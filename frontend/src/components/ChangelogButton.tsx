@@ -27,6 +27,14 @@ const changelog: ChangelogEntry[] = [
     ],
     notes: "Todo: Enzo damage buff implemented, add module values, tier list clicks displays full results, add pictures instead of text for modules"
   },
+  {
+    version: "1.01",
+    date: "2024-08-05",
+    changes: [
+      "Tier list links to full weapon results, added Firing Fiesta mod",
+    ],
+    notes: "Todo: Snipers are calculating damage per bullet, not DPS; should be separated out of the DPS tier list"
+  },
 ];
 
 export function ChangelogButton() {

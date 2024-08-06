@@ -142,13 +142,21 @@ struct ClearCacheQuery {
     target: Option<String>,
 }
 
-async fn clear_cache(data: web::Data<AppState>, query: web::Query<ClearCacheQuery>) -> HttpResponse {
+async fn clear_cache_and_fetch(
+    data: web::Data<AppState>,
+    query: web::Query<ClearCacheQuery>,
+) -> HttpResponse {
     let mut weapon_results = data.weapon_results.write().await;
+    let db = &data.db;
     
     match query.target.as_deref() {
         Some("all") => {
             weapon_results.clear();
-            HttpResponse::Ok().json(json!({"status": "All cache cleared successfully"}))
+            // Fetch all results
+            if let Err(e) = fetch_all_results(db, &mut weapon_results).await {
+                return HttpResponse::InternalServerError().json(json!({"status": format!("Failed to fetch new data: {}", e)}));
+            }
+            HttpResponse::Ok().json(json!({"status": "All cache cleared and new data fetched successfully"}))
         },
         Some(weapon) => {
             let keys_to_remove: Vec<String> = weapon_results.keys()
@@ -156,13 +164,43 @@ async fn clear_cache(data: web::Data<AppState>, query: web::Query<ClearCacheQuer
                 .cloned()
                 .collect();
             
-            for key in keys_to_remove {
-                weapon_results.remove(&key);
+            for key in &keys_to_remove {
+                weapon_results.remove(key);
             }
-            HttpResponse::Ok().json(json!({"status": format!("Cache cleared for weapon: {}", weapon)}))
+
+            // Fetch results for the specific weapon
+            if let Err(e) = fetch_weapon_results(db, weapon, &mut weapon_results).await {
+                return HttpResponse::InternalServerError().json(json!({"status": format!("Failed to fetch new data for weapon {}: {}", weapon, e)}));
+            }
+            HttpResponse::Ok().json(json!({"status": format!("Cache cleared and new data fetched for weapon: {}", weapon)}))
         },
         None => HttpResponse::BadRequest().json(json!({"status": "No target specified for cache clearing"}))
     }
+}
+
+async fn fetch_all_results(db: &mongodb::Database, weapon_results: &mut HashMap<String, WeaponResultDocument>) -> Result<(), mongodb::error::Error> {
+    let collection = db.collection::<WeaponResultDocument>("weapon_results");
+    let mut cursor = collection.find(None, None).await?;
+
+    while let Some(doc) = cursor.try_next().await? {
+        let key = format!("{}_{:.2}_{}", doc.weapon, doc.weak_point_hit_chance, doc.valby);
+        weapon_results.insert(key, doc);
+    }
+
+    Ok(())
+}
+
+async fn fetch_weapon_results(db: &mongodb::Database, weapon: &str, weapon_results: &mut HashMap<String, WeaponResultDocument>) -> Result<(), mongodb::error::Error> {
+    let collection = db.collection::<WeaponResultDocument>("weapon_results");
+    let filter = doc! { "weapon": weapon };
+    let mut cursor = collection.find(filter, None).await?;
+
+    while let Some(doc) = cursor.try_next().await? {
+        let key = format!("{}_{:.2}_{}", doc.weapon, doc.weak_point_hit_chance, doc.valby);
+        weapon_results.insert(key, doc);
+    }
+
+    Ok(())
 }
 
 #[actix_web::main]
@@ -212,7 +250,7 @@ async fn main() -> std::io::Result<()> {
                 .route("/optimize", web::post().to(optimize_weapon_handler))
                 .route("/weapon-data", web::get().to(get_weapon_data))
                 .route("/refresh-results", web::post().to(refresh_weapon_results))
-                .route("/clear-cache", web::post().to(clear_cache))
+                .route("/clear-cache-and-fetch", web::post().to(clear_cache_and_fetch))
     })
     .bind(address)?
     .run()
