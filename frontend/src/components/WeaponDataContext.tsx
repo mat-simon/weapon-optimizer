@@ -23,6 +23,7 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
 
   const fetchWeaponData = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await fetch(`${API_URL}/weapon-data`);
       if (!response.ok) {
@@ -31,7 +32,6 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
       const data: WeaponDataMap = await response.json();
       console.log('Fetched weapon data:', data);
       setWeaponData(data);
-      setError(null);
     } catch (err) {
       setError('Failed to load weapon data');
       console.error('Error fetching weapon data:', err);

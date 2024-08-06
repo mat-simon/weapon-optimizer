@@ -32,15 +32,16 @@ interface OptimizationConfig {
 }
 
 export default function WeaponOptimizer({ 
-  initialWeapon, 
-  initialValby, 
-  initialHitChance 
+  initialWeapon,
+  initialValby,
+  initialHitChance
 }: WeaponOptimizerProps) {
   const [hitChance, setHitChance] = useState<string>(initialHitChance || '1');
   const [config, setConfig] = useState<OptimizationConfig>({ 
     valby: initialValby || false, 
     enzo: false 
   });
+  const { weaponData, isLoading, error: weaponDataError, refreshData } = useWeaponData();
   const [weapons, setWeapons] = useState<Weapon[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWeapon, setSelectedWeapon] = useState<Weapon | null>(null);
@@ -48,7 +49,6 @@ export default function WeaponOptimizer({
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { weaponData, refreshData } = useWeaponData();
 
   useEffect(() => {
     fetchWeapons();
@@ -134,6 +134,33 @@ export default function WeaponOptimizer({
   const filteredWeapons = weapons.filter(weapon => 
     weapon.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-4xl space-y-6">
+        <div className="mt-6 p-4 bg-card rounded-lg">
+          <h2 className="text-xl font-bold mb-2 text-card-foreground text-center animate-pulse">
+            Getting weapon data from database...
+          </h2>
+          <p className="text-center mb-2">This may take a moment if the server was inactive.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (weaponDataError) {
+    return (
+      <div className="w-full max-w-4xl space-y-6">
+        <div className="mt-6 p-4 bg-card rounded-lg text-red-500">
+          <h2 className="text-xl font-bold mb-2 text-center">Error</h2>
+          <p className="text-center mb-2">{weaponDataError}</p>
+          <div className="flex justify-center">
+            <Button onClick={() => refreshData()}>Retry</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-4xl space-y-6">

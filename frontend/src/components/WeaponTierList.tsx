@@ -21,7 +21,7 @@ const SNIPER_WEAPONS = new Set([
 ]);
 
 const WeaponTierList: React.FC = () => {
-  const { weaponData, isLoading, error } = useWeaponData();
+  const { weaponData, isLoading, error, refreshData } = useWeaponData();
   const [isValby, setIsValby] = useState(false);
   const [tiers, setTiers] = useState<{ [key: string]: { tier: string; dps: number } }>({});
 
@@ -72,8 +72,33 @@ const WeaponTierList: React.FC = () => {
 
   const tierOrder = ['S', 'A', 'B', 'C', 'D', 'F'];
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (isLoading) {
+    return (
+      <div className="p-4">
+        <div className="mt-6 p-4 bg-card rounded-lg">
+          <h2 className="text-xl font-bold mb-2 text-card-foreground text-center animate-pulse">
+            Getting weapon data from database...
+          </h2>
+          <p className="text-center mb-2">This may take a moment if the server was inactive.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="mt-6 p-4 bg-card rounded-lg text-red-500">
+          <h2 className="text-xl font-bold mb-2 text-center">Error</h2>
+          <p className="text-center mb-2">{error}</p>
+          <div className="flex justify-center">
+            <Button onClick={() => refreshData()}>Retry</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!weaponData) return <div>No weapon data available</div>;
 
   return (

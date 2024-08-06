@@ -140,11 +140,11 @@ pub enum Weapon {
     TheAgeOfInnovation,
     WaveOfLight,
     // Shotgun
-    Executor, //
-    Fireworks, //
-    Gangster, //
+    Executor,
+    Fireworks,
+    Gangster,
     InABlink,
-    Smithereens, //
+    Smithereens,
     Subconsciousness,
     TheLastKnight,
     // SniperRifle
