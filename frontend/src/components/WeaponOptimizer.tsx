@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronsUpDown } from "lucide-react"
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,6 +14,7 @@ import { useWeaponData } from './WeaponDataContext'
 const API_URL = 'https://weapon-optimizer-api.onrender.com';
 const placeholderImage = 'https://via.placeholder.com/40';
 const hitChances = [0.25, 0.5, 1.0];
+const CACHE_KEY = 'weaponDataCache';
 
 interface Weapon {
   name: string;
@@ -41,7 +42,6 @@ export default function WeaponOptimizer({
     valby: initialValby || false, 
     enzo: false 
   });
-  const { weaponData, isLoading, error: weaponDataError, refreshData } = useWeaponData();
   const [weapons, setWeapons] = useState<Weapon[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWeapon, setSelectedWeapon] = useState<Weapon | null>(null);
@@ -49,6 +49,13 @@ export default function WeaponOptimizer({
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { weaponData, isLoading: isLoadingWeaponData, error: weaponDataError, refreshData } = useWeaponData();
+
+  const localCache = useMemo(() => {
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    return cachedData ? JSON.parse(cachedData) : {};
+  }, []);
 
   useEffect(() => {
     fetchWeapons();
@@ -92,7 +99,7 @@ export default function WeaponOptimizer({
 
     try {
       const cacheKey = `${selectedWeapon.name}_${hitChance}_${config.valby}`;
-      let optimizationResult = weaponData?.[selectedWeapon.name]?.[cacheKey];
+      let optimizationResult = localCache[cacheKey] || weaponData?.[selectedWeapon.name]?.[cacheKey];
 
       if (!optimizationResult) {
         console.log('Cache miss, fetching from API');
@@ -112,7 +119,10 @@ export default function WeaponOptimizer({
         }
 
         optimizationResult = await response.json();
-        await refreshData();
+        
+        // Update the local cache
+        localCache[cacheKey] = optimizationResult;
+        localStorage.setItem(CACHE_KEY, JSON.stringify(localCache));
       } else {
         console.log('Cache hit, using stored data');
       }
@@ -129,13 +139,13 @@ export default function WeaponOptimizer({
     } finally {
       setIsCalculating(false);
     }
-  }, [selectedWeapon, hitChance, config, weaponData, refreshData]);
+  }, [selectedWeapon, hitChance, config, localCache]);
 
   const filteredWeapons = weapons.filter(weapon => 
     weapon.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (isLoading) {
+  if (isLoadingWeaponData) {
     return (
       <div className="w-full max-w-4xl space-y-6">
         <div className="mt-6 p-4 bg-card rounded-lg">

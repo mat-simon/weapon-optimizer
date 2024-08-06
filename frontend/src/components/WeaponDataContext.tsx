@@ -5,6 +5,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { WeaponDataMap } from './types';
 
 const API_URL = 'https://weapon-optimizer-api.onrender.com';
+const CACHE_KEY = 'weaponDataCache';
 
 interface WeaponDataContextType {
   weaponData: WeaponDataMap | null;
@@ -23,8 +24,18 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
 
   const fetchWeaponData = async () => {
     setIsLoading(true);
-    setError(null);
     try {
+      // Check localStorage first
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        setWeaponData(parsedData);
+        setIsLoading(false);
+        setError(null);
+        console.log('Using cached weapon data');
+        return;
+      }
+
       const response = await fetch(`${API_URL}/weapon-data`);
       if (!response.ok) {
         throw new Error('Failed to fetch weapon data');
@@ -32,6 +43,9 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
       const data: WeaponDataMap = await response.json();
       console.log('Fetched weapon data:', data);
       setWeaponData(data);
+      // Cache the data
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      setError(null);
     } catch (err) {
       setError('Failed to load weapon data');
       console.error('Error fetching weapon data:', err);
@@ -45,6 +59,8 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
   }, []);
 
   const refreshData = async () => {
+    // Clear the cache before fetching new data
+    localStorage.removeItem(CACHE_KEY);
     await fetchWeaponData();
   };
 
@@ -56,7 +72,8 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
       if (!response.ok) {
         throw new Error('Failed to clear cache and fetch new data');
       }
-      // Refresh the weapon data after clearing cache and fetching
+      // Clear local cache and refresh data
+      localStorage.removeItem(CACHE_KEY);
       await fetchWeaponData();
     } catch (err) {
       console.error('Error clearing cache and fetching new data:', err);

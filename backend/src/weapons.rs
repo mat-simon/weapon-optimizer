@@ -703,7 +703,7 @@ impl WeaponBaseStats {
                 magazine_capacity: 115.0,
                 reload_time: 2.70,
                 crit_chance: 0.20,
-                crit_damage: 1.7,
+                crit_damage: 2.3,
                 weak_point_damage: 1.0,
                 bullets_per_shot: 1.0,
             },

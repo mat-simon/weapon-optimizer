@@ -42,6 +42,7 @@ const changelog: ChangelogEntry[] = [
     date: "2024-08-06",
     changes: [
       "Sniper tier list separated",
+      "EnduringLegacry crit damage 1.7 -> 2.3"
     ],
     notes: "Todo: Enzo buff, Gley no-reload"
   },
