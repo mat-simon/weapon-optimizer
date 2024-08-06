@@ -136,7 +136,7 @@ export default function WeaponOptimizer({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-4xl space-y-6">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -187,21 +187,21 @@ export default function WeaponOptimizer({
       </Popover>
 
       <div>
-        <label className="block text-sm font-medium mb-1 text-foreground text-center">Weak Point Hit Chance</label>
-        <ToggleGroup type="single" value={hitChance} onValueChange={(value) => value && setHitChance(value)}>
-          {hitChances.map((chance) => (
-            <ToggleGroupItem 
-              key={chance} 
-              value={chance.toString()} 
-              className="w-full bg-primary text-primary-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground data-[state=on]:ring-2 data-[state=on]:ring-accent-foreground"
-            >
-              {chance * 100}%
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <label className="block text-sm font-medium mb-1 text-foreground text-center">Weak Point Hit Chance</label>
+      <ToggleGroup type="single" value={hitChance} onValueChange={(value) => value && setHitChance(value)}>
+        {hitChances.map((chance) => (
+          <ToggleGroupItem 
+            key={chance} 
+            value={chance.toString()} 
+            className="w-full bg-primary text-primary-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground data-[state=on]:ring-2 data-[state=on]:ring-accent-foreground"
+          >
+            {chance * 100}%
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
 
-      <div className="flex space-x-4">
+    <div className="flex space-x-4 justify-center">
       <div className="flex items-center space-x-2">
         <Checkbox 
           id="valby"
@@ -210,10 +210,7 @@ export default function WeaponOptimizer({
             setConfig(prev => ({ ...prev, valby: checked === true, enzo: false }));
           }}
         />
-        <label 
-          htmlFor="valby" 
-          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-        >
+        <label htmlFor="valby" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           Valby Moisture Supply
         </label>
       </div>
@@ -225,60 +222,65 @@ export default function WeaponOptimizer({
             setConfig(prev => ({ ...prev, enzo: checked === true, valby: false }));
           }}
         />
-        <label 
-          htmlFor="enzo" 
-          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-        >
+        <label htmlFor="enzo" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           Enzo
         </label>
       </div>
     </div>
 
-    <Button 
-      onClick={handleOptimize}
-      disabled={isCalculating || !selectedWeapon}
-    >
-      {isCalculating ? 'Optimizing...' : 'Optimize'}
-    </Button>
-
-      {error && (
-        <div className="text-red-500 text-center mt-4">
-          {error}
-        </div>
-      )}
-
-      {isCalculating ? (
-        <div className="mt-6 p-4 bg-card rounded-lg">
-          <h2 className="text-xl font-bold mb-2 text-card-foreground text-center animate-pulse">
-            Calculating...
-          </h2>
-          <p className="text-center mb-2">Simulating weapon combinations</p>
-        </div>
-      ) : result && (
-        <div className="mt-6 p-4 bg-card rounded-lg">
-          <h2 className="text-xl font-bold mb-2 text-card-foreground text-center">Results</h2>
-          <p className="text-card-foreground text-center mb-4">DPS: {result.max_dps.toFixed(2)}</p>
-          
-          <h3 className="text-lg font-semibold mt-4 mb-2 text-card-foreground">Best Rolls:</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {result.best_rolls.map((roll, index) => (
-              <div key={index} className="bg-muted p-2 rounded text-muted-foreground">
-                {roll.roll_type}: {roll.value.toFixed(2)}
-              </div>
-            ))}
-          </div>
-          
-          <h3 className="text-lg font-semibold mt-4 mb-2 text-card-foreground">Best Modules:</h3>
-          <div className="grid grid-cols-5 gap-2">
-            {result.best_modules.map((module, index) => (
-              <div key={index} className="bg-muted p-2 rounded text-center text-muted-foreground">
-                <div>{module.name}</div>
-                <div className="text-xs mt-1">{module.module_type}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="flex justify-center">
+      <Button 
+        onClick={handleOptimize}
+        disabled={isCalculating || !selectedWeapon}
+      >
+        {isCalculating ? 'Optimizing...' : 'Optimize'}
+      </Button>
     </div>
-  );
+
+    {error && (
+      <div className="text-red-500 text-center mt-4">
+        {error}
+      </div>
+    )}
+
+    {isCalculating ? (
+      <div className="mt-6 p-4 bg-card rounded-lg">
+        <h2 className="text-xl font-bold mb-2 text-card-foreground text-center animate-pulse">
+          Calculating...
+        </h2>
+        <p className="text-center mb-2">Optimizing {selectedWeapon?.name}</p>
+        <p className="text-center mb-2">Hit Chance: {hitChance}</p>
+        <p className="text-center mb-2">Valby: {config.valby ? 'Yes' : 'No'}, Enzo: {config.enzo ? 'Yes' : 'No'}</p>
+      </div>
+    ) : result && (
+      <div className="mt-6 p-4 bg-card rounded-lg">
+        <h2 className="text-xl font-bold mb-2 text-card-foreground text-center">Results</h2>
+        <p className="text-card-foreground text-center mb-4">DPS: {result.max_dps.toFixed(2)}</p>
+        
+        <h3 className="text-lg font-semibold mt-4 mb-2 text-card-foreground">Best Rolls:</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {result.best_rolls.map((roll, index) => (
+            <div key={index} className="bg-muted p-2 rounded text-muted-foreground">
+              {roll.roll_type}: {roll.value.toFixed(2)}
+            </div>
+          ))}
+        </div>
+        
+        <h3 className="text-lg font-semibold mt-4 mb-2 text-card-foreground">Best Modules:</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {result.best_modules
+            .sort((a, b) => b[1] - a[1])
+            .map(([module, importance], index) => (
+              <div key={index} className="bg-muted p-2 rounded text-muted-foreground text-xs">
+                <div className="font-semibold">{module.name}</div>
+                <div className="text-xs">{module.module_type}</div>
+                <div className="mt-1">DPS Contribution: {importance.toFixed(1)}</div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    )}
+  </div>
+);
 }

@@ -31,9 +31,11 @@ const changelog: ChangelogEntry[] = [
     version: "1.01",
     date: "2024-08-05",
     changes: [
-      "Tier list links to full weapon results, added Firing Fiesta mod",
+      "Tier list links to full weapon results",
+      "Added Firing Fiesta module",
+      "Added module importance"
     ],
-    notes: "Todo: Snipers are calculating damage per bullet, not DPS; should be separated out of the DPS tier list"
+    notes: "Snipers are damage per bullet, not DPS; should be separated out of the DPS tier list"
   },
 ];
 

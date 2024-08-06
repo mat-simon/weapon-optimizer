@@ -4,13 +4,15 @@ export interface OptimizationResult {
     roll_type: string;
     value: number;
   }>;
-  best_modules: Array<{
-    name: string;
-    module_type: string;
-    effects: Array<{
-      effect_type: string;
-      value: number;
-    }>;
+  best_modules: Array<[Module, number]>;
+}
+
+export interface Module {
+  name: string;
+  module_type: string;
+  effects: Array<{
+    effect_type: string;
+    value: number;
   }>;
 }
 

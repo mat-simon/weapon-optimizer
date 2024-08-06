@@ -34,7 +34,7 @@ impl Default for OptimizationConfig {
 pub struct OptimizationResult {
     pub max_dps: f64,
     pub best_rolls: Vec<Roll>,
-    pub best_modules: Vec<Module>,
+    pub best_modules: Vec<(Module, f64)>,  // (Module, importance)
 }
 
 fn calculate_dps(stats: &WeaponBaseStats, weak_point_hit_chance: f64, gley: bool) -> f64 {
@@ -54,7 +54,7 @@ fn calculate_dps(stats: &WeaponBaseStats, weak_point_hit_chance: f64, gley: bool
     if stats.firing_fiesta == 1.0 {
         let multiplier = (cycle_time / 10.0).min(1.0);
         cycle_time += 3.0 * multiplier;
-        bullets_per_cycle += (stats.fire_rate / 60.0) * 3.0 * multiplier;
+        bullets_per_cycle += ((stats.fire_rate / 60.0) * 3.0 * multiplier).floor();
     }
 
     let ele_damage = (stats.base_atk * (stats.ele_enhancement) + stats.flat_ele_atk) *
@@ -225,18 +225,11 @@ pub async fn optimize_weapon(
 ) -> OptimizationResult {
     println!("Starting optimization for {:?}", base_stats.weapon_type);
     let start_time = std::time::Instant::now();
-
     let best_dps = Arc::new(AtomicU64::new(0));
     let best_combo = Arc::new(Mutex::new((Vec::new(), Vec::new())));
-    
     let roll_combinations: Vec<Vec<usize>> = (0..available_rolls.len()).combinations(4).collect();
-    println!("Generated {} roll combinations", roll_combinations.len());
-
-    println!("Using {} pre-calculated module combinations", module_combinations.len());
-
     let total_combinations = roll_combinations.len() * module_combinations.len();
     println!("Total combinations to evaluate: {}", total_combinations);
-
     let base_stats = Arc::new(base_stats);
     let available_rolls = Arc::new(available_rolls);
     let available_modules = Arc::new(available_modules);
@@ -275,10 +268,29 @@ pub async fn optimize_weapon(
     let final_dps = (best_dps.load(Ordering::Relaxed) as f64) / 1e6;
     println!("Optimization complete. Best DPS: {}, Total time: {:?}", final_dps, start_time.elapsed());
 
+    let module_importance: Vec<f64> = best_modules.iter().map(|module| {
+        let mut reduced_modules = best_modules.clone();
+        reduced_modules.retain(|m| m.name != module.name);
+        let reduced_dps = calculate_dps_with_combination(&base_stats, &best_rolls, &reduced_modules, weak_point_hit_chance, config.valby);
+        final_dps - reduced_dps
+    }).collect();
+
     OptimizationResult {
         max_dps: final_dps,
-        best_rolls,
-        best_modules,
+        best_rolls: best_rolls,
+        best_modules: best_modules.into_iter().zip(module_importance.into_iter()).collect(),
+    }
+}
+
+fn calculate_dps_with_combination(base_stats: &WeaponBaseStats, rolls: &[Roll], modules: &[Module], weak_point_hit_chance: f64, valby: bool) -> f64 {
+    let roll_indices: Vec<usize> = (0..rolls.len()).collect();
+    let module_indices: Vec<usize> = (0..modules.len()).collect();
+    let final_stats = apply_rolls_and_modules(base_stats, &roll_indices, &module_indices, rolls, modules, valby);
+    
+    if base_stats.weapon_type == WeaponType::SniperRifle {
+        calculate_dpbullet(&final_stats, weak_point_hit_chance)
+    } else {
+        calculate_dps(&final_stats, weak_point_hit_chance, false)
     }
 }
 
