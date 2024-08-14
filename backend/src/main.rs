@@ -24,6 +24,7 @@ struct OptimizationRequest {
     weapon: String,
     weak_point_hit_chance: f64,
     valby: bool,
+    enzo: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ struct WeaponResultDocument {
     weapon: String,
     weak_point_hit_chance: f64,
     valby: bool,
+    enzo: bool,
     #[serde(flatten)]
     result: OptimizationResult,
 }
@@ -48,7 +50,12 @@ async fn optimize_weapon_handler(
     req: web::Json<OptimizationRequest>,
     data: web::Data<AppState>,
 ) -> HttpResponse {
-    let cache_key = format!("{}_{}_{}", req.weapon, req.weak_point_hit_chance, req.valby);
+    let cache_key = format!("{}_{}_{}_{}",
+        req.weapon,
+        req.weak_point_hit_chance,
+        req.valby,
+        req.enzo
+    );
 
     let weapon_results = data.weapon_results.read().await;
     if let Some(doc) = weapon_results.get(&cache_key) {
@@ -73,12 +80,22 @@ async fn get_weapon_data(data: web::Data<AppState>) -> HttpResponse {
             let weapon = parts[0].to_string();
             let hit_chance = parts[1].to_string();
             let valby = parts[2] == "true";
-            (weapon, hit_chance, valby, doc.result.clone())
+            let enzo = parts[3] == "true";
+            (weapon, hit_chance, valby, enzo, doc.result.clone())
         })
-        .fold(HashMap::new(), |mut acc, (weapon, hit_chance, valby, result)| {
+        .fold(HashMap::new(), |mut acc, (weapon, hit_chance, valby, enzo, result)| {
+            let mode = if valby {
+                "valby"
+            } else if enzo {
+                "enzo"
+            } else {
+                "none"
+            };
+            let key = format!("{}_{}", hit_chance, mode);
+            
             acc.entry(weapon)
                 .or_insert_with(|| HashMap::new())
-                .insert(format!("{}_{}", hit_chance, if valby { "valby" } else { "noValby" }), result);
+                .insert(key, result);
             acc
         });
 
@@ -105,7 +122,12 @@ async fn load_all_weapon_results(db: &mongodb::Database) -> Result<HashMap<Strin
 
     let mut results = HashMap::new();
     while let Some(doc) = cursor.try_next().await? {
-        let key = format!("{}_{}_{}", doc.weapon, doc.weak_point_hit_chance, doc.valby);
+        let key = format!("{}_{}_{}_{}",
+            doc.weapon,
+            doc.weak_point_hit_chance,
+            doc.valby,
+            doc.enzo
+        );
         results.insert(key, doc);
     }
 
@@ -196,7 +218,12 @@ async fn fetch_weapon_results(db: &mongodb::Database, weapon: &str, weapon_resul
     let mut cursor = collection.find(filter, None).await?;
 
     while let Some(doc) = cursor.try_next().await? {
-        let key = format!("{}_{:.2}_{}", doc.weapon, doc.weak_point_hit_chance, doc.valby);
+        let key = format!("{}_{}_{}_{}",
+            doc.weapon,
+            doc.weak_point_hit_chance,
+            doc.valby,
+            doc.enzo
+        );
         weapon_results.insert(key, doc);
     }
 

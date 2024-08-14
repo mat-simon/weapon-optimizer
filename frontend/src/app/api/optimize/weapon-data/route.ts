@@ -8,24 +8,21 @@ export async function GET() {
         const client = await clientPromise;
         const db = client.db("weapon_optimizer");
         const collection = db.collection<OptimizationResult>("weapon_results");
-
         const results = await collection.find({}).toArray();
-
-        const weaponData: { [key: string]: { valby: { dps: number }, noValby: { dps: number } } } = {};
-
+        const weaponData: { [key: string]: { none: { dps: number }, valby: { dps: number }, enzo: { dps: number } } } = {};
         results.forEach((result: OptimizationResult) => {
             const key = result.weapon;
             if (!weaponData[key]) {
-                weaponData[key] = { valby: { dps: 0 }, noValby: { dps: 0 } };
+                weaponData[key] = { none: { dps: 0 }, valby: { dps: 0 }, enzo: { dps: 0 } };
             }
-
             if (result.valby) {
                 weaponData[key].valby.dps = result.max_dps;
+            } else if (result.enzo) {
+                weaponData[key].enzo.dps = result.max_dps;
             } else {
-                weaponData[key].noValby.dps = result.max_dps;
+                weaponData[key].none.dps = result.max_dps;
             }
         });
-
         return NextResponse.json(weaponData);
     } catch (error) {
         console.error('Failed to fetch weapon data:', error);

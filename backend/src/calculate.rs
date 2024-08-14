@@ -16,6 +16,7 @@ pub struct ModuleCombinations {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct OptimizationConfig {
     pub valby: bool,
+    pub enzo: bool,
     pub gley: bool,
     pub gley_duration: f64,
 }
@@ -24,6 +25,7 @@ impl Default for OptimizationConfig {
     fn default() -> Self {
         OptimizationConfig {
             valby: false,
+            enzo: false,
             gley: false,
             gley_duration: 9.0,
         }
@@ -41,13 +43,13 @@ fn calculate_dps(stats: &WeaponBaseStats, weak_point_hit_chance: f64, gley: bool
     let time_to_empty_mag = (stats.magazine_capacity) / (stats.fire_rate) * 60.0;
     let mut cycle_time = if gley {
         // config.gley_duration + 1.0
-        9.0 + 1.0
+        8.9 + 1.654
     } else {
         time_to_empty_mag + stats.reload_time
     };
     let mut bullets_per_cycle = if gley {
         // (stats.fire_rate / 60.0 * config.gley_duration).floor()
-        (stats.fire_rate / 60.0 * 9.0).floor()
+        (stats.fire_rate / 60.0 * 8.9).floor()
     } else {
         (stats.magazine_capacity).floor()
     };
@@ -126,7 +128,8 @@ fn apply_rolls_and_modules(
     module_indices: &[usize],
     available_rolls: &[Roll],
     available_modules: &[Module],
-    valby: bool
+    valby: bool,
+    enzo: bool,
 ) -> WeaponBaseStats {
     let mut new_stats = *base_stats;
     let mut bonus_multipliers: HashMap<ModuleBonusType, f64> = HashMap::new();
@@ -195,22 +198,30 @@ fn apply_rolls_and_modules(
     if valby {
         new_stats.crit_chance += 0.2;
     }
+    if enzo {
+        new_stats.crit_chance += 0.29;
+        new_stats.weak_point_damage += 0.15;
+        *bonus_multipliers.entry(ModuleBonusType::ReloadTime).or_insert(0.0) += -0.1;
+        *bonus_multipliers.entry(ModuleBonusType::Crit).or_insert(0.0) += 0.2;
+        *bonus_multipliers.entry(ModuleBonusType::Atk).or_insert(0.0) += 0.2;
+    }
     new_stats.base_atk *= 1.0 + bonus_multipliers[&ModuleBonusType::Atk];
     new_stats.fire_rate *= 1.0 + bonus_multipliers[&ModuleBonusType::FireRate];
     new_stats.crit_chance *= 1.0 + bonus_multipliers[&ModuleBonusType::Crit];
     new_stats.crit_damage *= 1.0 + bonus_multipliers[&ModuleBonusType::CritDamage];
     new_stats.magazine_capacity *= 1.0 + bonus_multipliers[&ModuleBonusType::RoundsPerMagazine];
-    new_stats.reload_time *= 1.0 + bonus_multipliers[&ModuleBonusType::ReloadTime] * 0.8;
+    new_stats.reload_time *= 1.0 + bonus_multipliers[&ModuleBonusType::ReloadTime];
     new_stats.weak_point_damage *= 1.0 + bonus_multipliers[&ModuleBonusType::WeakPointDamage];
     new_stats.bullets_per_shot *= 1.0 + bonus_multipliers[&ModuleBonusType::ShellCapacity];
     new_stats.weak_point_damage += 0.5;
     // new_stats.bullets_per_shot = new_stats.bullets_per_shot.floor();
     
-    
     // Max crit chance is 100%
     if new_stats.crit_chance > 1.0 {
         new_stats.crit_chance = 1.0;
     }
+    // Reload cancelling is 80%
+    new_stats.reload_time *= 0.8;
 
     new_stats
 }
@@ -244,6 +255,7 @@ pub async fn optimize_weapon(
                 &available_rolls,
                 &available_modules,
                 config.valby,
+                config.enzo,
             );
 
             let final_dps = if base_stats.weapon_type == WeaponType::SniperRifle {
@@ -271,7 +283,7 @@ pub async fn optimize_weapon(
     let module_importance: Vec<f64> = best_modules.iter().map(|module| {
         let mut reduced_modules = best_modules.clone();
         reduced_modules.retain(|m| m.name != module.name);
-        let reduced_dps = calculate_dps_with_combination(&base_stats, &best_rolls, &reduced_modules, weak_point_hit_chance, config.valby);
+        let reduced_dps = calculate_dps_with_combination(&base_stats, &best_rolls, &reduced_modules, weak_point_hit_chance, config.valby, config.enzo);
         final_dps - reduced_dps
     }).collect();
 
@@ -282,10 +294,10 @@ pub async fn optimize_weapon(
     }
 }
 
-fn calculate_dps_with_combination(base_stats: &WeaponBaseStats, rolls: &[Roll], modules: &[Module], weak_point_hit_chance: f64, valby: bool) -> f64 {
+fn calculate_dps_with_combination(base_stats: &WeaponBaseStats, rolls: &[Roll], modules: &[Module], weak_point_hit_chance: f64, valby: bool, enzo: bool) -> f64 {
     let roll_indices: Vec<usize> = (0..rolls.len()).collect();
     let module_indices: Vec<usize> = (0..modules.len()).collect();
-    let final_stats = apply_rolls_and_modules(base_stats, &roll_indices, &module_indices, rolls, modules, valby);
+    let final_stats = apply_rolls_and_modules(base_stats, &roll_indices, &module_indices, rolls, modules, valby, enzo);
     
     if base_stats.weapon_type == WeaponType::SniperRifle {
         calculate_dpbullet(&final_stats, weak_point_hit_chance)

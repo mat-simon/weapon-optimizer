@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
 
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
-import { OptimizationResult } from './types';
 import { Button } from './ui/button';
 import { useWeaponData } from './WeaponDataContext';
 
@@ -22,32 +21,39 @@ const SNIPER_WEAPONS = new Set([
 
 const WeaponTierList: React.FC = () => {
   const { weaponData, isLoading, error, refreshData } = useWeaponData();
-  const [isValby, setIsValby] = useState(false);
+  const [mode, setMode] = useState<'none' | 'valby' | 'enzo'>('none');
   const [tiers, setTiers] = useState<{ [key: string]: { tier: string; dps: number } }>({});
 
   const filteredData = useMemo(() => {
+    console.log('WeaponData in filteredData:', weaponData);
     if (!weaponData) return {};
-    return Object.entries(weaponData).reduce((acc, [weaponName, data]) => {
-      const relevantKey = Object.keys(data).find(key => 
-        key.startsWith('1_') && key.endsWith(isValby ? 'valby' : 'noValby')
-      );
-      if (relevantKey && !isSniper(weaponName)) {
-        acc[weaponName] = data[relevantKey];
+    return Object.entries(weaponData).reduce((acc, [weaponName, weaponModes]) => {
+      if (!isSniper(weaponName)) {
+        const relevantKey = Object.keys(weaponModes).find(key => {
+          const [hitChance, modeType] = key.split('_');
+          return hitChance === '1' && modeType === mode;
+        });
+        
+        if (relevantKey && weaponModes[relevantKey]) {
+          acc[weaponName] = { dps: weaponModes[relevantKey].max_dps };
+        }
       }
       return acc;
-    }, {} as { [key: string]: OptimizationResult });
-  }, [weaponData, isValby]);
+    }, {} as { [key: string]: { dps: number } });
+  }, [weaponData, mode]);
 
   function isSniper(weaponName: string): boolean {
     return SNIPER_WEAPONS.has(weaponName);
   }
 
   useEffect(() => {
+    console.log('FilteredData:', filteredData);
     setTiers(assignTiers(filteredData));
   }, [filteredData]);
 
-  const assignTiers = (data: { [key: string]: OptimizationResult }): { [key: string]: { tier: string; dps: number } } => {
-    const values: number[] = Object.values(data).map(wd => wd.max_dps);
+  const assignTiers = (data: { [key: string]: { dps: number } }): { [key: string]: { tier: string; dps: number } } => {
+    console.log('Assigning tiers for data:', data);
+    const values: number[] = Object.values(data).map(wd => wd.dps);
     const n = values.length;
 
     if (n === 0) return {};
@@ -56,8 +62,8 @@ const WeaponTierList: React.FC = () => {
     const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
     const stdDev = Math.sqrt(variance);
 
-    return Object.entries(data).reduce((acc, [name, weaponData]) => {
-      const zScore = (weaponData.max_dps - mean) / stdDev;
+    const result = Object.entries(data).reduce((acc, [name, weaponData]) => {
+      const zScore = (weaponData.dps - mean) / stdDev;
       let tier: string;
       if (zScore > 2.0) tier = 'S';
       else if (zScore > 1.0) tier = 'A';
@@ -65,9 +71,12 @@ const WeaponTierList: React.FC = () => {
       else if (zScore > -1.0) tier = 'C';
       else if (zScore > -2.0) tier = 'D';
       else tier = 'F';
-      acc[name] = { tier, dps: Math.floor(weaponData.max_dps) };
+      acc[name] = { tier, dps: Math.floor(weaponData.dps) };
       return acc;
     }, {} as { [key: string]: { tier: string; dps: number } });
+
+    console.log('Assigned tiers:', result);
+    return result;
   };
 
   const tierOrder = ['S', 'A', 'B', 'C', 'D', 'F'];
@@ -104,14 +113,20 @@ const WeaponTierList: React.FC = () => {
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="valby-mode"
-            checked={isValby}
-            onCheckedChange={setIsValby}
-          />
-          <Label htmlFor="valby-mode">Valby Mode</Label>
-        </div>
+        <RadioGroup value={mode} onValueChange={(value: 'none' | 'valby' | 'enzo') => setMode(value)} className="flex space-x-4">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="none" id="none" />
+            <Label htmlFor="none">Normal</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="valby" id="valby" />
+            <Label htmlFor="valby">Valby</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="enzo" id="enzo" />
+            <Label htmlFor="enzo">Enzo</Label>
+          </div>
+        </RadioGroup>
         <Link href="/">
           <Button variant="outline">Back to Optimizer</Button>
         </Link>
@@ -127,7 +142,7 @@ const WeaponTierList: React.FC = () => {
               .map(([weaponName, weaponInfo]) => (
                 <Link 
                   key={weaponName} 
-                  href={`/?weapon=${encodeURIComponent(weaponName)}&valby=${isValby}&hitChance=1`}
+                  href={`/?weapon=${encodeURIComponent(weaponName)}${mode !== 'none' ? `&${mode}=true` : ''}&hitChance=1`}
                   className="bg-card text-card-foreground p-2 rounded hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 >
                   <div className="flex justify-between items-center">

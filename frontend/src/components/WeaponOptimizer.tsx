@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronsUpDown } from "lucide-react"
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,7 +14,6 @@ import { useWeaponData } from './WeaponDataContext'
 const API_URL = 'https://weapon-optimizer-api.onrender.com';
 const placeholderImage = 'https://via.placeholder.com/40';
 const hitChances = [0.25, 0.5, 1.0];
-const CACHE_KEY = 'weaponDataCache';
 
 interface Weapon {
   name: string;
@@ -24,6 +23,7 @@ interface Weapon {
 interface WeaponOptimizerProps {
   initialWeapon?: string | null;
   initialValby?: boolean;
+  initialEnzo?: boolean;
   initialHitChance?: string | null;
 }
 
@@ -35,12 +35,13 @@ interface OptimizationConfig {
 export default function WeaponOptimizer({ 
   initialWeapon,
   initialValby,
+  initialEnzo,
   initialHitChance
 }: WeaponOptimizerProps) {
   const [hitChance, setHitChance] = useState<string>(initialHitChance || '1');
   const [config, setConfig] = useState<OptimizationConfig>({ 
     valby: initialValby || false, 
-    enzo: false 
+    enzo: initialEnzo || false 
   });
   const [weapons, setWeapons] = useState<Weapon[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,12 +51,7 @@ export default function WeaponOptimizer({
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { weaponData, isLoading: isLoadingWeaponData, error: weaponDataError, refreshData } = useWeaponData();
-
-  const localCache = useMemo(() => {
-    const cachedData = localStorage.getItem(CACHE_KEY);
-    return cachedData ? JSON.parse(cachedData) : {};
-  }, []);
+  const { weaponData, isLoading: isLoadingWeaponData, error: weaponDataError, refreshData, updateCache } = useWeaponData();
 
   useEffect(() => {
     fetchWeapons();
@@ -66,11 +62,11 @@ export default function WeaponOptimizer({
       const weapon = weapons.find(w => w.name === initialWeapon);
       if (weapon) {
         setSelectedWeapon(weapon);
-        setConfig(prev => ({ ...prev, valby: initialValby || false }));
+        setConfig({ valby: initialValby || false, enzo: initialEnzo || false });
         setHitChance(initialHitChance || '1');
       }
     }
-  }, [initialWeapon, initialValby, initialHitChance, weapons]);
+  }, [initialWeapon, initialValby, initialEnzo, initialHitChance, weapons]);
 
   useEffect(() => {
     if (initialWeapon && selectedWeapon) {
@@ -98,8 +94,9 @@ export default function WeaponOptimizer({
     setError(null);
 
     try {
-      const cacheKey = `${selectedWeapon.name}_${hitChance}_${config.valby}`;
-      let optimizationResult = localCache[cacheKey] || weaponData?.[selectedWeapon.name]?.[cacheKey];
+      const mode = config.valby ? 'valby' : config.enzo ? 'enzo' : 'none';
+      const cacheKey = `${hitChance}_${mode}`;
+      let optimizationResult = weaponData?.[selectedWeapon.name]?.[cacheKey];
 
       if (!optimizationResult) {
         console.log('Cache miss, fetching from API');
@@ -113,16 +110,17 @@ export default function WeaponOptimizer({
             enzo: config.enzo,
           }),
         });
-
+      
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-
+      
         optimizationResult = await response.json();
         
-        // Update the local cache
-        localCache[cacheKey] = optimizationResult;
-        localStorage.setItem(CACHE_KEY, JSON.stringify(localCache));
+        // Update the cache
+        if (updateCache && optimizationResult) {
+          updateCache(`${selectedWeapon.name}.${cacheKey}`, optimizationResult);
+        }
       } else {
         console.log('Cache hit, using stored data');
       }
@@ -139,7 +137,7 @@ export default function WeaponOptimizer({
     } finally {
       setIsCalculating(false);
     }
-  }, [selectedWeapon, hitChance, config, localCache]);
+  }, [selectedWeapon, hitChance, config, weaponData, updateCache]);
 
   const filteredWeapons = weapons.filter(weapon => 
     weapon.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -240,27 +238,26 @@ export default function WeaponOptimizer({
 
     <div className="flex space-x-4 justify-center">
       <div className="flex items-center space-x-2">
-        <Checkbox 
-          id="valby"
-          checked={config.valby}
-          onCheckedChange={(checked) => {
-            setConfig(prev => ({ ...prev, valby: checked === true, enzo: false }));
-          }}
-        />
+      <Checkbox 
+        id="valby"
+        checked={config.valby}
+        onCheckedChange={(checked) => {
+          setConfig({ valby: checked === true, enzo: false });
+        }}
+      />
         <label htmlFor="valby" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           Valby Moisture Supply
         </label>
-      </div>
-      <div className="flex items-center space-x-2">
-        <Checkbox 
-          id="enzo"
-          checked={config.enzo}
-          onCheckedChange={(checked) => {
-            setConfig(prev => ({ ...prev, enzo: checked === true, valby: false }));
-          }}
-        />
+
+      <Checkbox 
+        id="enzo"
+        checked={config.enzo}
+        onCheckedChange={(checked) => {
+          setConfig({ enzo: checked === true, valby: false });
+        }}
+      />
         <label htmlFor="enzo" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-          Enzo
+          Enzo 1 and 4
         </label>
       </div>
     </div>

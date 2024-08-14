@@ -42,9 +42,18 @@ const changelog: ChangelogEntry[] = [
     date: "2024-08-06",
     changes: [
       "Sniper tier list separated",
-      "EnduringLegacry crit damage 1.7 -> 2.3"
+      "EnduringLegacry crit damage 1.7 -> 2.3",
+      "Added EleConductor module for GregsReversedFate combinations"
     ],
-    notes: "Todo: Enzo buff, Gley no-reload"
+    notes: "Todo: Enzo buff, Gley no-reload, EleConductor for most weapons won't have great uptime..."
+  },
+  {
+    version: "1.03",
+    date: "2024-08-14",
+    changes: [
+      "Added Enzo buffs (100% uptime)"
+    ],
+    notes: "Todo: Gley no-reload, maybe add DPS ranking for sniper instead of just DPBullet"
   },
 ];
 

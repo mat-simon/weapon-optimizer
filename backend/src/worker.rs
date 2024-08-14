@@ -26,6 +26,7 @@ struct OptimizationKey {
     weapon: String,
     weak_point_hit_chance: f64,
     valby: bool,
+    enzo: bool
 }
 
 impl Eq for OptimizationKey {}
@@ -36,6 +37,7 @@ impl Hash for OptimizationKey {
         let bits: u64 = self.weak_point_hit_chance.to_bits();
         bits.hash(state);
         self.valby.hash(state);
+        self.enzo.hash(state);
     }
 }
 
@@ -132,6 +134,7 @@ async fn store_results_in_db(db: &mongodb::Database, results: WorkerResults) -> 
                 "weapon": key.weapon,
                 "weak_point_hit_chance": key.weak_point_hit_chance,
                 "valby": key.valby,
+                "enzo": key.enzo,
             },
             doc! { "$set": mongodb::bson::to_bson(&result).unwrap() },
             mongodb::options::UpdateOptions::builder().upsert(true).build(),
@@ -146,6 +149,7 @@ async fn update_weapons(db: &mongodb::Database, module_combinations: &HashMap<St
         if let Ok(weapon) = Weapon::from_str(&name) {
             update_weapon(db, module_combinations, weapon, &OptimizationConfig::default()).await?;
             update_weapon(db, module_combinations, weapon, &OptimizationConfig { valby: true, ..Default::default() }).await?;
+            update_weapon(db, module_combinations, weapon, &OptimizationConfig { enzo: true, ..Default::default() }).await?;
         }
     }
     Ok(())
@@ -156,6 +160,7 @@ async fn update_bullet_type(db: &mongodb::Database, module_combinations: &HashMa
         for weapon in Weapon::all().iter().filter(|w| WeaponBaseStats::get(**w).bullet_type == bt) {
             update_weapon(db, module_combinations, *weapon, &OptimizationConfig::default()).await?;
             update_weapon(db, module_combinations, *weapon, &OptimizationConfig { valby: true, ..Default::default() }).await?;
+            update_weapon(db, module_combinations, *weapon, &OptimizationConfig { enzo: true, ..Default::default() }).await?;
         }
     }
     Ok(())
@@ -166,6 +171,7 @@ async fn update_weapon_type(db: &mongodb::Database, module_combinations: &HashMa
         for weapon in Weapon::all().iter().filter(|w| WeaponBaseStats::get(**w).weapon_type == wt) {
             update_weapon(db, module_combinations, *weapon, &OptimizationConfig::default()).await?;
             update_weapon(db, module_combinations, *weapon, &OptimizationConfig { valby: true, ..Default::default() }).await?;
+            update_weapon(db, module_combinations, *weapon, &OptimizationConfig { enzo: true, ..Default::default() }).await?;
         }
     }
     Ok(())
@@ -214,9 +220,11 @@ async fn update_all(db: &mongodb::Database, module_combinations: &HashMap<String
 
         let available_modules = get_available_modules(base_stats.bullet_type, base_stats.weapon_type);
         
-        for valby in [false, true] {
-            let config = OptimizationConfig { valby, ..Default::default() };
-            for &weak_point_hit_chance in &[0.0, 0.25, 0.33, 0.5, 0.67, 0.75, 1.0] {
+        for config_type in [(true, false), (false, true), (false, false)] {
+            let (valby, enzo) = config_type;
+            let config = OptimizationConfig { valby, enzo, ..Default::default() };
+            
+            for &weak_point_hit_chance in &[0.25, 0.5, 1.0] {
                 let result = optimize_weapon(
                     base_stats,
                     available_rolls.clone(),
@@ -225,11 +233,12 @@ async fn update_all(db: &mongodb::Database, module_combinations: &HashMap<String
                     weak_point_hit_chance,
                     config.clone(),
                 ).await;
-
+        
                 let key = OptimizationKey {
                     weapon: weapon.to_string(),
                     weak_point_hit_chance,
                     valby,
+                    enzo,
                 };
                 results.weapon_results.insert(key, result);
             }
@@ -278,6 +287,7 @@ async fn update_weapon(db: &mongodb::Database, module_combinations: &HashMap<Str
                 "weapon": weapon.to_string(),
                 "weak_point_hit_chance": weak_point_hit_chance,
                 "valby": config.valby,
+                "enzo": config.enzo,
             },
             doc! { "$set": mongodb::bson::to_bson(&result).unwrap() },
             mongodb::options::UpdateOptions::builder().upsert(true).build(),
@@ -357,9 +367,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Command::UpdateWeapons { names } => {
             update_weapons(&db, &module_combinations, names.clone()).await?;
-            for name in names {
-                // clear_api_cache(&name).await?;
-            }
+            // for name in names {
+            //     clear_api_cache(&name).await?;
+            // }
         },
         Command::UpdateWeaponType { weapon_type } => {
             update_weapon_type(&db, &module_combinations, weapon_type.clone()).await?;
