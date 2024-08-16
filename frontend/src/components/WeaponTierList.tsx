@@ -20,7 +20,7 @@ const SNIPER_WEAPONS = new Set([
 ]);
 
 const WeaponTierList: React.FC = () => {
-  const { weaponData, isLoading, error, refreshData } = useWeaponData();
+  const { weaponData, isLoading, error } = useWeaponData();
   const [mode, setMode] = useState<'none' | 'valby' | 'enzo'>('none');
   const [tiers, setTiers] = useState<{ [key: string]: { tier: string; dps: number } }>({});
 
@@ -100,9 +100,6 @@ const WeaponTierList: React.FC = () => {
         <div className="mt-6 p-4 bg-card rounded-lg text-red-500">
           <h2 className="text-xl font-bold mb-2 text-center">Error</h2>
           <p className="text-center mb-2">{error}</p>
-          <div className="flex justify-center">
-            <Button onClick={() => refreshData()}>Retry</Button>
-          </div>
         </div>
       </div>
     );

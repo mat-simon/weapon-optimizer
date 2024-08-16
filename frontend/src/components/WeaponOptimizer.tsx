@@ -51,7 +51,7 @@ export default function WeaponOptimizer({
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { weaponData, isLoading: isLoadingWeaponData, error: weaponDataError, refreshData, updateCache } = useWeaponData();
+  const { isLoading: isLoadingWeaponData, error: weaponDataError, optimizeWeapon } = useWeaponData();
 
   useEffect(() => {
     fetchWeapons();
@@ -94,36 +94,13 @@ export default function WeaponOptimizer({
     setError(null);
 
     try {
-      const mode = config.valby ? 'valby' : config.enzo ? 'enzo' : 'none';
-      const cacheKey = `${hitChance}_${mode}`;
-      let optimizationResult = weaponData?.[selectedWeapon.name]?.[cacheKey];
+      const configString = JSON.stringify({ 
+        weak_point_hit_chance: parseFloat(hitChance),
+        valby: config.valby,
+        enzo: config.enzo,
+      });
 
-      if (!optimizationResult) {
-        console.log('Cache miss, fetching from API');
-        const response = await fetch(`${API_URL}/optimize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            weapon: selectedWeapon.name, 
-            weak_point_hit_chance: parseFloat(hitChance),
-            valby: config.valby,
-            enzo: config.enzo,
-          }),
-        });
-      
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-      
-        optimizationResult = await response.json();
-        
-        // Update the cache
-        if (updateCache && optimizationResult) {
-          updateCache(`${selectedWeapon.name}.${cacheKey}`, optimizationResult);
-        }
-      } else {
-        console.log('Cache hit, using stored data');
-      }
+      const optimizationResult = await optimizeWeapon(selectedWeapon.name, configString);
 
       if (optimizationResult) {
         console.log('Optimization result:', optimizationResult);
@@ -137,7 +114,7 @@ export default function WeaponOptimizer({
     } finally {
       setIsCalculating(false);
     }
-  }, [selectedWeapon, hitChance, config, weaponData, updateCache]);
+  }, [selectedWeapon, hitChance, config, optimizeWeapon]);
 
   const filteredWeapons = weapons.filter(weapon => 
     weapon.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -162,9 +139,6 @@ export default function WeaponOptimizer({
         <div className="mt-6 p-4 bg-card rounded-lg text-red-500">
           <h2 className="text-xl font-bold mb-2 text-center">Error</h2>
           <p className="text-center mb-2">{weaponDataError}</p>
-          <div className="flex justify-center">
-            <Button onClick={() => refreshData()}>Retry</Button>
-          </div>
         </div>
       </div>
     );
