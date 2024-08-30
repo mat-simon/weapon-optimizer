@@ -31,7 +31,7 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
       setWeaponData(data);
     } catch (err) {
       setError('Failed to load weapon data');
-      console.error('Error fetching weapon data:', err);
+      // console.error('Error fetching weapon data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -47,7 +47,7 @@ export const WeaponDataProvider: React.FC<{children: React.ReactNode}> = ({ chil
       if (!response.ok) throw new Error('Optimization failed');
       return await response.json();
     } catch (err) {
-      console.error('Error optimizing weapon:', err);
+      // console.error('Error optimizing weapon:', err);
       return null;
     }
   };

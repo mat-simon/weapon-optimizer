@@ -25,7 +25,6 @@ const WeaponTierList: React.FC = () => {
   const [tiers, setTiers] = useState<{ [key: string]: { tier: string; dps: number } }>({});
 
   const filteredData = useMemo(() => {
-    console.log('WeaponData in filteredData:', weaponData);
     if (!weaponData) return {};
     return Object.entries(weaponData).reduce((acc, [weaponName, weaponModes]) => {
       if (!isSniper(weaponName)) {
@@ -47,12 +46,10 @@ const WeaponTierList: React.FC = () => {
   }
 
   useEffect(() => {
-    console.log('FilteredData:', filteredData);
     setTiers(assignTiers(filteredData));
   }, [filteredData]);
 
   const assignTiers = (data: { [key: string]: { dps: number } }): { [key: string]: { tier: string; dps: number } } => {
-    console.log('Assigning tiers for data:', data);
     const values: number[] = Object.values(data).map(wd => wd.dps);
     const n = values.length;
 
@@ -75,7 +72,6 @@ const WeaponTierList: React.FC = () => {
       return acc;
     }, {} as { [key: string]: { tier: string; dps: number } });
 
-    console.log('Assigned tiers:', result);
     return result;
   };
 

@@ -25,7 +25,7 @@ export async function GET() {
         });
         return NextResponse.json(weaponData);
     } catch (error) {
-        console.error('Failed to fetch weapon data:', error);
+        // console.error('Failed to fetch weapon data:', error);
         return NextResponse.json({ error: 'Failed to fetch weapon data' }, { status: 500 });
     }
 }

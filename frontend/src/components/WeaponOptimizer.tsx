@@ -81,7 +81,6 @@ export default function WeaponOptimizer({
       const data = await response.json();
       setWeapons(data.map((name: string) => ({ name, image: placeholderImage })));
     } catch (error) {
-      console.error("Error fetching weapons:", error);
       setError("Failed to fetch weapons. Please try again later.");
     }
   };
